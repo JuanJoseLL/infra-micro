@@ -1,0 +1,88 @@
+trigger:
+  branches:
+    include:
+    - develop
+    - main
+  paths:
+    include:
+    - '**/*.tf'
+    - 'azure-pipelines.yml'
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  - name: environment
+    ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
+      value: 'prod'
+    ${{ if eq(variables['Build.SourceBranchName'], 'develop') }}:
+      value: 'dev'
+    ${{ if not(or(eq(variables['Build.SourceBranchName'], 'main'), eq(variables['Build.SourceBranchName'], 'develop'))) }}:
+      value: 'feature'
+
+stages:
+- stage: Validate
+  displayName: Validate Infrastructure
+  jobs:
+  - job: TerraformValidate
+    steps:
+    - task: TerraformInstaller@0
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: '1.5.7'
+    
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Init'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        backendServiceArm: 'Azure-Service-Connection'
+        backendAzureRmResourceGroupName: 'terraform-state-rg'
+        backendAzureRmStorageAccountName: 'tfstoragemicrosvc'
+        backendAzureRmContainerName: 'tfstate'
+        backendAzureRmKey: '$(environment).terraform.tfstate'
+    
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Validate'
+      inputs:
+        provider: 'azurerm'
+        command: 'validate'
+    
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Plan'
+      inputs:
+        provider: 'azurerm'
+        command: 'plan'
+        environmentServiceNameAzureRM: 'Azure-Service-Connection'
+        commandOptions: '-out=$(System.DefaultWorkingDirectory)/terraform.tfplan'
+
+- stage: Apply
+  displayName: Apply Infrastructure
+  dependsOn: Validate
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'), or(eq(variables['Build.SourceBranchName'], 'main'), eq(variables['Build.SourceBranchName'], 'develop')))
+  jobs:
+  - job: TerraformApply
+    steps:
+    - task: TerraformInstaller@0
+      displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: '1.5.7'
+    
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Init'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        backendServiceArm: 'Azure-Service-Connection'
+        backendAzureRmResourceGroupName: 'terraform-state-rg'
+        backendAzureRmStorageAccountName: 'tfstoragemicrosvc'
+        backendAzureRmContainerName: 'tfstate'
+        backendAzureRmKey: '$(environment).terraform.tfstate'
+    
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Apply'
+      inputs:
+        provider: 'azurerm'
+        command: 'apply'
+        environmentServiceNameAzureRM: 'Azure-Service-Connection'
+        commandOptions: '$(System.DefaultWorkingDirectory)/terraform.tfplan'
