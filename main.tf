@@ -79,8 +79,7 @@ module "redis" {
   location            = azurerm_resource_group.rg.location
   capacity            = 1
   family              = "C"
-  sku                 = "Standard"
-  enable_non_ssl_port = true
+  sku                 = "Basic"
   tags                = local.tags
 }
 

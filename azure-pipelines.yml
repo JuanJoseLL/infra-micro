@@ -113,7 +113,7 @@ stages:
         backendAzureRmStorageAccountName: 'tfstoragemicrosvc'
         backendAzureRmContainerName: 'tfstate'
         backendAzureRmKey: '$(environment).terraform.tfstate'
-        
+
     - task: DownloadPipelineArtifact@2
       displayName: 'Download Terraform Plan'
       inputs:
@@ -143,7 +143,7 @@ stages:
           # Verify AKS cluster exists
           AKS_NAME=$(terraform output -json | jq -r '.kubernetes_cluster_name.value')
           AKS_STATUS=$(az aks show --name $AKS_NAME --resource-group $RG_NAME --query provisioningState -o tsv)
-          echo "AKS Cluster Status: $AKS_STATUS"
+          echo "AKS Cluster Status1: $AKS_STATUS"
           
           if [ "$AKS_STATUS" != "Succeeded" ]; then
             echo "AKS deployment not successful.1 Current state: $AKS_STATUS"
