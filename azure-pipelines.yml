@@ -19,6 +19,9 @@ variables:
       value: 'dev'
     ${{ if not(or(eq(variables['Build.SourceBranchName'], 'main'), eq(variables['Build.SourceBranchName'], 'develop'))) }}:
       value: 'feature'
+  - name: terraformVersion
+    value: '1.5.7'
+  - group: terraform-variables-${{ variables.environment }}
 
 stages:
 - stage: Validate
@@ -29,7 +32,20 @@ stages:
     - task: TerraformInstaller@0
       displayName: 'Install Terraform'
       inputs:
-        terraformVersion: '1.5.7'
+        terraformVersion: '$(terraformVersion)'
+    
+    - task: Bash@3
+      displayName: 'Setup SSH Key'
+      inputs:
+        targetType: 'inline'
+        script: |
+          # Create .ssh directory
+          mkdir -p ~/.ssh
+          echo "$$SSH_PUBLIC_KEY" > ~/.ssh/id_rsa.pub
+          chmod 644 ~/.ssh/id_rsa.pub
+          echo "SSH key configured"
+      env:
+        SSH_PUBLIC_KEY: $(sshPublicKey)
     
     - task: TerraformTaskV4@4
       displayName: 'Terraform Init'
@@ -54,7 +70,7 @@ stages:
         provider: 'azurerm'
         command: 'plan'
         environmentServiceNameAzureRM: 'Azure-Service-Connection'
-        commandOptions: '-out=$(System.DefaultWorkingDirectory)/terraform.tfplan'
+        commandOptions: '-out=$(System.DefaultWorkingDirectory)/terraform.tfplan -var="prefix=$(resourcePrefix)-$(environment)" -var="common_tags={\"environment\":\"$(environment)\",\"project\":\"MicroserviceApp\"}"'
 
 - stage: Apply
   displayName: Apply Infrastructure
@@ -66,7 +82,20 @@ stages:
     - task: TerraformInstaller@0
       displayName: 'Install Terraform'
       inputs:
-        terraformVersion: '1.5.7'
+        terraformVersion: '$(terraformVersion)'
+    
+    - task: Bash@3
+      displayName: 'Setup SSH Key'
+      inputs:
+        targetType: 'inline'
+        script: |
+          # Create .ssh directory
+          mkdir -p ~/.ssh
+          echo "$$SSH_PUBLIC_KEY" > ~/.ssh/id_rsa.pub
+          chmod 644 ~/.ssh/id_rsa.pub
+          echo "SSH key configured"
+      env:
+        SSH_PUBLIC_KEY: $(sshPublicKey)
     
     - task: TerraformTaskV4@4
       displayName: 'Terraform Init'
@@ -86,3 +115,27 @@ stages:
         command: 'apply'
         environmentServiceNameAzureRM: 'Azure-Service-Connection'
         commandOptions: '$(System.DefaultWorkingDirectory)/terraform.tfplan'
+    
+    - task: Bash@3
+      displayName: 'Verify Deployment'
+      inputs:
+        targetType: 'inline'
+        script: |
+          echo "Verifying AKS deployment..."
+          az login --service-principal -u $(servicePrincipalId) -p $(servicePrincipalKey) --tenant $(tenantId)
+          az account set --subscription $(subscriptionId)
+          
+          # Get resource group name dynamically
+          RG_NAME=$(terraform output -json | jq -r '.resource_group_name.value')
+          
+          # Verify AKS cluster exists
+          AKS_NAME=$(terraform output -json | jq -r '.kubernetes_cluster_name.value')
+          AKS_STATUS=$(az aks show --name $AKS_NAME --resource-group $RG_NAME --query provisioningState -o tsv)
+          echo "AKS Cluster Status: $AKS_STATUS"
+          
+          if [ "$AKS_STATUS" != "Succeeded" ]; then
+            echo "AKS deployment not successful. Current state: $AKS_STATUS"
+            exit 1
+          fi
+          
+          echo "All resources deployed successfully!"
