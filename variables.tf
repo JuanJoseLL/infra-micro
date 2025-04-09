@@ -28,5 +28,5 @@ variable "aks_node_count" {
 variable "ssh_public_key_path" {
   type        = string
   description = "Path to the SSH public key file to use for AKS nodes (e.g., ~/.ssh/id_rsa.pub)."
-  default     = "~/.ssh/id_rsa.pub" 
+  default     = "~/.ssh/azure_aks.pub" 
 }
