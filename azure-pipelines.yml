@@ -134,7 +134,7 @@ stages:
           echo "AKS Cluster Status: $AKS_STATUS"
           
           if [ "$AKS_STATUS" != "Succeeded" ]; then
-            echo "AKS deployment not successful. Current state: $AKS_STATUS"
+            echo "AKS deployment not successful.1 Current state: $AKS_STATUS"
             exit 1
           fi
           
