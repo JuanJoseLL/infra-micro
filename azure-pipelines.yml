@@ -9,7 +9,7 @@ trigger:
     - 'azure-pipelines.yml'
 
 pool:
-  vmImage: ubuntu-22.04
+  vmImage: ubuntu-latest
 
 variables:
   - name: environment
@@ -41,8 +41,8 @@ stages:
         script: |
           # Create .ssh directory
           mkdir -p ~/.ssh
-          echo "$$SSH_PUBLIC_KEY" > ~/.ssh/id_rsa.pub
-          chmod 644 ~/.ssh/id_rsa.pub
+          echo "$$SSH_PUBLIC_KEY" > ~/.ssh/azure_aks.pub
+          chmod 644 ~/.ssh/azure_aks.pub
           echo "SSH key configured"
       env:
         SSH_PUBLIC_KEY: $(sshPublicKey)
@@ -91,8 +91,8 @@ stages:
         script: |
           # Create .ssh directory
           mkdir -p ~/.ssh
-          echo "$$SSH_PUBLIC_KEY" > ~/.ssh/id_rsa.pub
-          chmod 644 ~/.ssh/id_rsa.pub
+          echo "$$SSH_PUBLIC_KEY" > ~/.ssh/azure_aks.pub
+          chmod 644 ~/.ssh/azure_aks.pub
           echo "SSH key configured"
       env:
         SSH_PUBLIC_KEY: $(sshPublicKey)
