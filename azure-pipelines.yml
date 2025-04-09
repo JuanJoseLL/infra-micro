@@ -72,6 +72,12 @@ stages:
         environmentServiceNameAzureRM: 'Azure-Service-Connection'
         commandOptions: '-out=$(System.DefaultWorkingDirectory)/terraform.tfplan -var="prefix=$(resourcePrefix)-$(environment)" -var="common_tags={\"environment\":\"$(environment)\",\"project\":\"MicroserviceApp\"}"'
 
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Terraform Plan'
+      inputs:
+        targetPath: '$(System.DefaultWorkingDirectory)/terraform.tfplan'
+        artifactName: 'terraform-plan'
+        
 - stage: Apply
   displayName: Apply Infrastructure
   dependsOn: Validate
@@ -107,7 +113,13 @@ stages:
         backendAzureRmStorageAccountName: 'tfstoragemicrosvc'
         backendAzureRmContainerName: 'tfstate'
         backendAzureRmKey: '$(environment).terraform.tfstate'
-    
+        
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download Terraform Plan'
+      inputs:
+        artifactName: 'terraform-plan'
+        targetPath: '$(System.DefaultWorkingDirectory)'
+
     - task: TerraformTaskV4@4
       displayName: 'Terraform Apply'
       inputs:
