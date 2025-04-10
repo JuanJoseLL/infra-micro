@@ -99,7 +99,7 @@ stages:
           mkdir -p ~/.ssh
           echo "$$SSH_PUBLIC_KEY" > ~/.ssh/azure_aks.pub
           chmod 644 ~/.ssh/azure_aks.pub
-          echo "SSH key configured"
+          echo "SSH key configured!"
       env:
         SSH_PUBLIC_KEY: $(sshPublicKey)
     
