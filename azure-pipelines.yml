@@ -17,7 +17,7 @@ variables:
       value: 'prod'
     ${{ if eq(variables['Build.SourceBranchName'], 'dev') }}:
       value: 'dev'
-    ${{ if not(or(eq(variables['Build.SourceBranchName'], 'main'), eq(variables['Build.SourceBranchName'], 'develop'))) }}:
+    ${{ if not(or(eq(variables['Build.SourceBranchName'], 'main'), eq(variables['Build.SourceBranchName'], 'dev'))) }}:
       value: 'feature'
   - name: terraformVersion
     value: '1.5.7'
