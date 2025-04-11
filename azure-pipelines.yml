@@ -1,7 +1,7 @@
 trigger:
   branches:
     include:
-    - develop
+    - dev
     - main
   paths:
     include:
@@ -15,7 +15,7 @@ variables:
   - name: environment
     ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
       value: 'prod'
-    ${{ if eq(variables['Build.SourceBranchName'], 'develop') }}:
+    ${{ if eq(variables['Build.SourceBranchName'], 'dev') }}:
       value: 'dev'
     ${{ if not(or(eq(variables['Build.SourceBranchName'], 'main'), eq(variables['Build.SourceBranchName'], 'develop'))) }}:
       value: 'feature'
@@ -81,7 +81,7 @@ stages:
 - stage: Apply
   displayName: Apply Infrastructure
   dependsOn: Validate
-  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'), or(eq(variables['Build.SourceBranchName'], 'main'), eq(variables['Build.SourceBranchName'], 'develop')))
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranchName'], 'main'))
   jobs:
   - job: TerraformApply
     steps:
