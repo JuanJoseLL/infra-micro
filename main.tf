@@ -20,45 +20,45 @@ resource "azurerm_virtual_network" "vnet" {
   tags                = local.tags
 }
 
-resource "azurerm_private_dns_zone" "redis_private_zone" {
-  name                = "privatelink.redis.cache.windows.net" 
-  resource_group_name = azurerm_resource_group.rg.name
-  tags                = local.tags
-}
+# resource "azurerm_private_dns_zone" "redis_private_zone" {
+#   name                = "privatelink.redis.cache.windows.net" 
+#   resource_group_name = azurerm_resource_group.rg.name
+#   tags                = local.tags
+# }
 
-resource "azurerm_private_dns_zone_virtual_network_link" "redis_zone_link" {
-  name                  = "${local.resource_prefix}-redis-zone-link"
-  resource_group_name   = azurerm_resource_group.rg.name
-  private_dns_zone_name = azurerm_private_dns_zone.redis_private_zone.name
-  virtual_network_id    = azurerm_virtual_network.vnet.id
-  registration_enabled  = false 
-  tags                  = local.tags
-}
+# resource "azurerm_private_dns_zone_virtual_network_link" "redis_zone_link" {
+#   name                  = "${local.resource_prefix}-redis-zone-link"
+#   resource_group_name   = azurerm_resource_group.rg.name
+#   private_dns_zone_name = azurerm_private_dns_zone.redis_private_zone.name
+#   virtual_network_id    = azurerm_virtual_network.vnet.id
+#   registration_enabled  = false 
+#   tags                  = local.tags
+# }
 
-resource "azurerm_private_endpoint" "redis_pe" {
-  name                = "${module.redis.name}-pe" 
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
-  subnet_id           = azurerm_subnet.aks_subnet.id 
-  tags                = local.tags
+# resource "azurerm_private_endpoint" "redis_pe" {
+#   name                = "${module.redis.name}-pe" 
+#   resource_group_name = azurerm_resource_group.rg.name
+#   location            = azurerm_resource_group.rg.location
+#   subnet_id           = azurerm_subnet.aks_subnet.id 
+#   tags                = local.tags
 
-  private_service_connection {
-    name                           = "${module.redis.name}-psc"
-    private_connection_resource_id = module.redis.id 
-    is_manual_connection           = false
-    subresource_names              = ["redisCache"] 
-  }
+#   private_service_connection {
+#     name                           = "${module.redis.name}-psc"
+#     private_connection_resource_id = module.redis.id 
+#     is_manual_connection           = false
+#     subresource_names              = ["redisCache"] 
+#   }
 
-  private_dns_zone_group {
-    name                 = "redis-dns-group" 
-    private_dns_zone_ids = [azurerm_private_dns_zone.redis_private_zone.id]
-  }
+#   private_dns_zone_group {
+#     name                 = "redis-dns-group" 
+#     private_dns_zone_ids = [azurerm_private_dns_zone.redis_private_zone.id]
+#   }
 
-  #
-  depends_on = [
-    module.redis 
-  ]
-}
+#   #
+#   depends_on = [
+#     module.redis 
+#   ]
+# }
 resource "azurerm_subnet" "aks_subnet" {
   name                 = "aks-subnet" 
   resource_group_name  = azurerm_resource_group.rg.name
@@ -110,17 +110,17 @@ module "acr" {
   tags                = local.tags
 }
 
-module "redis" {
-  source = "./modules/redis"
+# module "redis" {
+#   source = "./modules/redis"
   
-  name                = "${local.resource_prefix}-redis"
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
-  capacity            = 1
-  family              = "C"
-  sku                 = "Basic"
-  tags                = local.tags
-}
+#   name                = "${local.resource_prefix}-redis"
+#   resource_group_name = azurerm_resource_group.rg.name
+#   location            = azurerm_resource_group.rg.location
+#   capacity            = 1
+#   family              = "C"
+#   sku                 = "Basic"
+#   tags                = local.tags
+# }
 
 
 resource "azurerm_role_assignment" "aks_to_acr" {
