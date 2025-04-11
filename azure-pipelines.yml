@@ -141,7 +141,7 @@ stages:
           RG_NAME=$(terraform output -json | jq -r '.resource_group_name.value')
           
           # Verify AKS cluster exists
-          AKS_NAME=$(terraform output -json | jq -r '.kubernetes_cluster_name.value')
+          AKS_NAME=$(terraform output -json | jq -r '.aks_cluster_name.value')
           AKS_STATUS=$(az aks show --name $AKS_NAME --resource-group $RG_NAME --query provisioningState -o tsv)
           echo "AKS Cluster Status1: $AKS_STATUS"
           
