@@ -80,11 +80,6 @@ resource "azurerm_subnet_network_security_group_association" "aks_subnet_nsg" {
   network_security_group_id = azurerm_network_security_group.aks_nsg.id
 }
 
-data "local_file" "ssh_pub_key" {
-  filename = abspath(pathexpand(var.ssh_public_key_path)) 
-}
-
-
 module "aks" {
   source = "./modules/aks" 
   
@@ -92,7 +87,7 @@ module "aks" {
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   vnet_subnet_id      = azurerm_subnet.aks_subnet.id 
-  ssh_public_key      = data.local_file.ssh_pub_key.content 
+  ssh_public_key      = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDRk10lbQMiG6cs97m3gQuDoMB2CYKNQMgMj03kWtnH8OriMdik4uHJvp+FYKWFfD3bQV6QMb0/5i/kmFMjfI9Ax9wat/Uo+TvVtSfs4WWuTOXPCSXXycAcgrefQSo0xGuhWh1icDSmHiJOqJhf+eiSe6HGVVhLisX2n8YaOskv/UFPZyTMdB754CsSgnbNZbLPXRXb0q5EsBmRzDGQ2+5w7LtLY9SMsl6qRORJdJJ8uSDyu1qr4/JTkJCmcUSvrdLq3NTW/OsDWIRAiHgtcexTZ2TMrUOtTkl5Bz8HtxhxlRDoJDno2HmCjFVZ8uW/ItLmrzwE2fwRg6UukpnXNo7NFBDD4RbCPuVuQYyA19xmPCz9rYiKOmGHXt5yKwIa69Z7WKfiuC+bvgmEhq+m7widnkJmWpmmN2a9cn3phyNDJyE5xxLecEm6TtR+B4FSufMN4mKeESbQBdtKrlPcQMzNlnBYFO9iLpn6k7K9E5f2YAQZVcR35/V3Ply2gY5cHp5TIDR8eOMsOAGwSOv2B3/f3sUkvPfCuj+Qc6taNhWgUZ3/DMiBz1/2c9cKykqe2ONqgFwtt8bDHp9Gr4gsX0nZ2EZHQU/Uhp0bVaUyzaLc7s+XtwWeIpd10BhHK8DCQ235fANwHMSZJWzQWCwjglh9J27dUiGGgnmeKxvW8BvfBQ== juanjose@MacBook-Air-JuanJ.local"
   node_count         = var.aks_node_count
   vm_size            = "Standard_D2_v2" 
   tags               = local.tags

@@ -159,7 +159,7 @@ stages:
         script: |
           echo "Resources created successfully! Waiting 30 seconds before destroying..."
           sleep 30
-          echo "Wait complete. Proceeding with resource destruction test1..."
+          echo "Wait complete. Proceeding with resource destruction test12..."
     
     - task: TerraformTaskV4@4
       displayName: 'Terraform Destroy'
