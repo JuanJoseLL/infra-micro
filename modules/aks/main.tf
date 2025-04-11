@@ -1,4 +1,3 @@
-
 resource "azurerm_kubernetes_cluster" "k8s" {
   name                = var.cluster_name
   location            = var.location
@@ -26,13 +25,11 @@ resource "azurerm_kubernetes_cluster" "k8s" {
   }
 
   network_profile {
-    network_plugin    = "kubenet" 
+    network_plugin    = "kubenet"
     load_balancer_sku = "standard"
+    service_cidr      = "10.1.0.0/16" # Adjusted to avoid overlap
+    dns_service_ip    = "10.1.0.10"   # Within the service_cidr range
   }
-
-  
-
-  
 
 }
 
