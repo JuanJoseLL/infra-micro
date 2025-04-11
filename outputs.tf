@@ -28,8 +28,8 @@ output "acr_admin_username" {
   value       = module.acr.admin_username
 }
 
-output "redis_hostname" {
-  description = "The hostname of the Redis instance."
-  value       = module.redis.hostname
-}
+# output "redis_hostname" {
+#   description = "The hostname of the Redis instance."
+#   value       = module.redis.hostname
+# }
 
