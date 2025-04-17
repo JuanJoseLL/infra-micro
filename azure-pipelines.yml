@@ -18,91 +18,131 @@ variables:
     ${{ if eq(variables['Build.SourceBranchName'], 'dev') }}:
       value: 'dev'
     ${{ if not(or(eq(variables['Build.SourceBranchName'], 'main'), eq(variables['Build.SourceBranchName'], 'dev'))) }}:
-      value: 'feature'
+      value: 'feature' # Or handle feature branches differently if needed
   - name: terraformVersion
     value: '1.5.7'
+  # Variable group containing secrets like service principal creds, ssh key, resourcePrefix etc.
+  # Ensure variables like 'servicePrincipalId', 'servicePrincipalKey', 'tenantId', 'subscriptionId', 'sshPublicKey', 'resourcePrefix' are defined here.
   - group: terraform-variables-${{ variables.environment }}
 
 stages:
+# =========================================================================
+# Stage 1: Validate Terraform Configuration
+# =========================================================================
 - stage: Validate
   displayName: Validate Infrastructure
   jobs:
   - job: TerraformValidate
+    displayName: Validate Terraform Code
     steps:
+    # Always good practice to sync time, especially if auth issues arise
+    - task: Bash@3
+      displayName: 'Sync Agent Time'
+      inputs:
+        targetType: 'inline'
+        script: |
+          echo "Attempting to sync time..."
+          sudo timedatectl set-ntp true
+          sleep 5
+          echo "Time sync command executed. Current time:"
+          date -u
+
     - task: TerraformInstaller@0
-      displayName: 'Install Terraform'
+      displayName: 'Install Terraform $(terraformVersion)'
       inputs:
         terraformVersion: '$(terraformVersion)'
-    
+
+    # Setup SSH Key - Needed if Terraform modules reference SSH keys or for plan potentially
     - task: Bash@3
       displayName: 'Setup SSH Key'
       inputs:
         targetType: 'inline'
         script: |
-          # Create .ssh directory
           mkdir -p ~/.ssh
-          echo "$$SSH_PUBLIC_KEY" > ~/.ssh/azure_aks.pub
+          # Use double quotes for variable expansion, escape $ for literal dollar sign if needed in script logic
+          echo "$(sshPublicKey)" > ~/.ssh/azure_aks.pub
           chmod 644 ~/.ssh/azure_aks.pub
-          echo "SSH key configured"
+          echo "SSH public key configured in ~/.ssh/azure_aks.pub"
+      # Ensure sshPublicKey is defined in your variable group 'terraform-variables-...'
       env:
+        # Passing it via env is safer for secrets than direct inline script injection
         SSH_PUBLIC_KEY: $(sshPublicKey)
-    
+
     - task: TerraformTaskV4@4
       displayName: 'Terraform Init'
       inputs:
         provider: 'azurerm'
         command: 'init'
-        backendServiceArm: 'Azure-Service-Connection'
-        backendAzureRmResourceGroupName: 'terraform-state-rg'
-        backendAzureRmStorageAccountName: 'tfstoragemicrosvc'
-        backendAzureRmContainerName: 'tfstate'
-        backendAzureRmKey: '$(environment).terraform.tfstate'
-    
+        backendServiceArm: 'Azure-Service-Connection' # Name of your Azure service connection
+        backendAzureRmResourceGroupName: 'terraform-state-rg' # TF State Storage RG
+        backendAzureRmStorageAccountName: 'tfstoragemicrosvc' # TF State Storage Account
+        backendAzureRmContainerName: 'tfstate' # TF State Container
+        backendAzureRmKey: '$(environment).terraform.tfstate' # TF State file name per environment
+
     - task: TerraformTaskV4@4
       displayName: 'Terraform Validate'
       inputs:
         provider: 'azurerm'
         command: 'validate'
-    
+
     - task: TerraformTaskV4@4
       displayName: 'Terraform Plan'
       inputs:
         provider: 'azurerm'
         command: 'plan'
+        # Ensure Azure-Service-Connection has necessary permissions for planning
         environmentServiceNameAzureRM: 'Azure-Service-Connection'
+        # Pass required variables to Terraform plan
         commandOptions: '-out=$(System.DefaultWorkingDirectory)/terraform.tfplan -var="prefix=$(resourcePrefix)-$(environment)" -var="common_tags={\"environment\":\"$(environment)\",\"project\":\"MicroserviceApp\"}"'
 
     - task: PublishPipelineArtifact@1
       displayName: 'Publish Terraform Plan'
       inputs:
         targetPath: '$(System.DefaultWorkingDirectory)/terraform.tfplan'
-        artifactName: 'terraform-plan'
-        
+        artifactName: 'terraform-plan-$(environment)' # Add environment to artifact name for clarity
+
+# =========================================================================
+# Stage 2: Apply Terraform Configuration
+# =========================================================================
 - stage: Apply
   displayName: Apply Infrastructure
   dependsOn: Validate
-  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranchName'], 'main'))
+  # Run Apply only if Validate succeeded AND it's not a PR AND it's the main branch
+  condition: and(succeeded('Validate'), ne(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranchName'], 'main'))
   jobs:
   - job: TerraformApply
+    displayName: Apply Terraform Plan
     steps:
+    - task: Bash@3
+      displayName: 'Sync Agent Time'
+      inputs:
+        targetType: 'inline'
+        script: |
+          echo "Attempting to sync time..."
+          sudo timedatectl set-ntp true
+          sleep 5
+          echo "Time sync command executed. Current time:"
+          date -u
+
     - task: TerraformInstaller@0
-      displayName: 'Install Terraform'
+      displayName: 'Install Terraform $(terraformVersion)'
       inputs:
         terraformVersion: '$(terraformVersion)'
-    
+
+    # SSH Key needed for Apply if resources require it during creation/update
     - task: Bash@3
       displayName: 'Setup SSH Key'
       inputs:
         targetType: 'inline'
         script: |
-          # Create .ssh directory
           mkdir -p ~/.ssh
-          echo "$$SSH_PUBLIC_KEY" > ~/.ssh/azure_aks.pub
+          echo "$(sshPublicKey)" > ~/.ssh/azure_aks.pub
           chmod 644 ~/.ssh/azure_aks.pub
-          echo "SSH key configured!"
+          echo "SSH public key configured in ~/.ssh/azure_aks.pub"
       env:
         SSH_PUBLIC_KEY: $(sshPublicKey)
-    
+
+    # Init is required before Apply, even with a plan file, to configure the backend
     - task: TerraformTaskV4@4
       displayName: 'Terraform Init'
       inputs:
@@ -117,7 +157,7 @@ stages:
     - task: DownloadPipelineArtifact@2
       displayName: 'Download Terraform Plan'
       inputs:
-        artifactName: 'terraform-plan'
+        artifactName: 'terraform-plan-$(environment)'
         targetPath: '$(System.DefaultWorkingDirectory)'
 
     - task: TerraformTaskV4@4
@@ -125,49 +165,171 @@ stages:
       inputs:
         provider: 'azurerm'
         command: 'apply'
+        # Service connection needed for applying changes
         environmentServiceNameAzureRM: 'Azure-Service-Connection'
+        # Apply the downloaded plan file
         commandOptions: '$(System.DefaultWorkingDirectory)/terraform.tfplan'
-    
+
+# =========================================================================
+# Stage 3: Verify Deployment
+# =========================================================================
+- stage: Verify
+  displayName: Verify Deployment
+  dependsOn: Apply
+  # Run Verify only if Apply succeeded (implies Validate also succeeded and branch/PR conditions met)
+  condition: succeeded('Apply')
+  jobs:
+  - job: VerifyDeploymentJob
+    displayName: Verify AKS Cluster Status
+    steps:
     - task: Bash@3
-      displayName: 'Verify Deployment'
+      displayName: 'Sync Agent Time'
+      inputs:
+        targetType: 'inline'
+        script: |
+          echo "Attempting to sync time..."
+          sudo timedatectl set-ntp true
+          sleep 5
+          echo "Time sync command executed. Current time:"
+          date -u
+
+    - task: TerraformInstaller@0
+      displayName: 'Install Terraform $(terraformVersion)'
+      inputs:
+        terraformVersion: '$(terraformVersion)'
+
+    # Init is required to read outputs from the state file
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Init for Verification'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        backendServiceArm: 'Azure-Service-Connection'
+        backendAzureRmResourceGroupName: 'terraform-state-rg'
+        backendAzureRmStorageAccountName: 'tfstoragemicrosvc'
+        backendAzureRmContainerName: 'tfstate'
+        backendAzureRmKey: '$(environment).terraform.tfstate'
+        # No need for environmentServiceNameAzureRM for init unless specific auth required
+
+    # The actual verification script
+    - task: Bash@3
+      displayName: 'Verify AKS Deployment Status'
       inputs:
         targetType: 'inline'
         script: |
           echo "Verifying AKS deployment..."
+          # Login using credentials from variable group - required for AZ CLI commands
+          # Ensure servicePrincipalId, servicePrincipalKey, tenantId are in the variable group
           az login --service-principal -u $(servicePrincipalId) -p $(servicePrincipalKey) --tenant $(tenantId)
+          if [ $? -ne 0 ]; then
+              echo "Azure login failed. Check service principal credentials."
+              exit 1
+          fi
+
+          # Set the subscription context
           az account set --subscription $(subscriptionId)
-          
-          # Get resource group name dynamically
-          RG_NAME=$(terraform output -json | jq -r '.resource_group_name.value')
-          
-          # Verify AKS cluster exists
-          AKS_NAME=$(terraform output -json | jq -r '.aks_cluster_name.value')
-          AKS_STATUS=$(az aks show --name $AKS_NAME --resource-group $RG_NAME --query provisioningState -o tsv)
-          echo "AKS Cluster Status1: $AKS_STATUS"
-          
-          if [ "$AKS_STATUS" != "Succeeded" ]; then
-            echo "AKS deployment not successful.234 Current state: $AKS_STATUS"
-            exit 1
+          if [ $? -ne 0 ]; then
+              echo "Failed to set Azure subscription context."
+              exit 1
           fi
           
-          echo "All resources deployed successfully!"
-    
+          echo "Retrieving outputs from Terraform state..."
+          # Using -raw is simpler for single string outputs
+          # Use 'terraform output -raw <output_name>'
+          RG_NAME=$(terraform output -raw resource_group_name)
+          if [ -z "$RG_NAME" ]; then echo "Failed to get resource_group_name from terraform output"; exit 1; fi
+          
+          AKS_NAME=$(terraform output -raw aks_cluster_name)
+          if [ -z "$AKS_NAME" ]; then echo "Failed to get aks_cluster_name from terraform output"; exit 1; fi
+
+          echo "Checking status for AKS Cluster '$AKS_NAME' in Resource Group '$RG_NAME'..."
+          AKS_STATUS=$(az aks show --name $AKS_NAME --resource-group $RG_NAME --query provisioningState -o tsv)
+          
+          if [ "$AKS_STATUS" == "Succeeded" ]; then
+            echo "AKS Cluster Status: $AKS_STATUS - Verification successful!"
+          elif [ "$AKS_STATUS" == "Failed" ]; then
+             echo "AKS cluster deployment failed. Status: $AKS_STATUS"
+             # Optionally get more details or logs here
+             exit 1
+          else
+             echo "AKS cluster deployment is not yet in a final 'Succeeded' state. Current state: $AKS_STATUS"
+             # Depending on workflow, you might want to fail here or implement a wait/retry loop
+             exit 1 # Failing if not 'Succeeded' for simplicity
+          fi
+          
+          echo "All resources verified successfully!"
+
+# =========================================================================
+# Stage 4: Destroy Infrastructure (Example - Use with caution!)
+# =========================================================================
+- stage: Destroy
+  displayName: Destroy Infrastructure
+  dependsOn: Verify # Or Apply, if Verify isn't critical before destroy
+  # Run Destroy only if Verify succeeded. Implicitly runs only on main branch due to dependency chain.
+  # WARNING: Automatically destroying on 'main' is risky. Consider adding manual approval
+  # or triggering this stage manually / on a different event.
+  condition: succeeded('Verify')
+  jobs:
+  - job: TerraformDestroy
+    displayName: Destroy Terraform Resources
+    steps:
+    - task: Bash@3
+      displayName: 'Sync Agent Time'
+      inputs:
+        targetType: 'inline'
+        script: |
+          echo "Attempting to sync time..."
+          sudo timedatectl set-ntp true
+          sleep 5
+          echo "Time sync command executed. Current time:"
+          date -u
+
+    - task: TerraformInstaller@0
+      displayName: 'Install Terraform $(terraformVersion)'
+      inputs:
+        terraformVersion: '$(terraformVersion)'
+
+    # SSH Key *might* be needed for destroy operations depending on resources/providers
+    - task: Bash@3
+      displayName: 'Setup SSH Key'
+      inputs:
+        targetType: 'inline'
+        script: |
+          mkdir -p ~/.ssh
+          echo "$(sshPublicKey)" > ~/.ssh/azure_aks.pub
+          chmod 644 ~/.ssh/azure_aks.pub
+          echo "SSH public key configured in ~/.ssh/azure_aks.pub"
+      env:
+        SSH_PUBLIC_KEY: $(sshPublicKey)
+
+    # Init is required before destroy to configure the backend
+    - task: TerraformTaskV4@4
+      displayName: 'Terraform Init for Destroy'
+      inputs:
+        provider: 'azurerm'
+        command: 'init'
+        backendServiceArm: 'Azure-Service-Connection'
+        backendAzureRmResourceGroupName: 'terraform-state-rg'
+        backendAzureRmStorageAccountName: 'tfstoragemicrosvc'
+        backendAzureRmContainerName: 'tfstate'
+        backendAzureRmKey: '$(environment).terraform.tfstate'
+
+    # Optional Wait - moved to the Destroy stage
     - task: Bash@3
       displayName: 'Wait 30 seconds before destroying resources'
       inputs:
         targetType: 'inline'
         script: |
-          echo "Resources created successfully! Waiting 30 seconds before destroying..."
+          echo "Infrastructure verified. Waiting 30 seconds before starting destruction..."
           sleep 30
-          echo "Wait complete. Proceeding with resource destruction test12345..."
-    
+          echo "Wait complete. Proceeding with resource destruction..."
+
     - task: TerraformTaskV4@4
       displayName: 'Terraform Destroy'
       inputs:
         provider: 'azurerm'
         command: 'destroy'
+        # Service connection needed for destroying resources
         environmentServiceNameAzureRM: 'Azure-Service-Connection'
+        # Pass variables needed for destroy, ensure -auto-approve is used cautiously
         commandOptions: '-auto-approve -var="prefix=$(resourcePrefix)-$(environment)" -var="common_tags={\"environment\":\"$(environment)\",\"project\":\"MicroserviceApp\"}"'
-
-
-
