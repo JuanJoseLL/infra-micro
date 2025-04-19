@@ -262,74 +262,74 @@ stages:
 # =========================================================================
 # Stage 4: Destroy Infrastructure (Example - Use with caution!)
 # =========================================================================
-- stage: Destroy
-  displayName: Destroy Infrastructure
-  dependsOn: Verify # Or Apply, if Verify isn't critical before destroy
-  # Run Destroy only if Verify succeeded. Implicitly runs only on main branch due to dependency chain.
-  # WARNING: Automatically destroying on 'main' is risky. Consider adding manual approval
-  # or triggering this stage manually / on a different event.
-  condition: succeeded('Verify')
-  jobs:
-  - job: TerraformDestroy
-    displayName: Destroy Terraform Resources
-    steps:
-    - task: Bash@3
-      displayName: 'Sync Agent Time'
-      inputs:
-        targetType: 'inline'
-        script: |
-          echo "Attempting to sync time..."
-          sudo timedatectl set-ntp true
-          sleep 5
-          echo "Time sync command executed. Current time:"
-          date -u
+# - stage: Destroy
+#   displayName: Destroy Infrastructure
+#   dependsOn: Verify # Or Apply, if Verify isn't critical before destroy
+#   # Run Destroy only if Verify succeeded. Implicitly runs only on main branch due to dependency chain.
+#   # WARNING: Automatically destroying on 'main' is risky. Consider adding manual approval
+#   # or triggering this stage manually / on a different event.
+#   condition: succeeded('Verify')
+#   jobs:
+#   - job: TerraformDestroy
+#     displayName: Destroy Terraform Resources
+#     steps:
+#     - task: Bash@3
+#       displayName: 'Sync Agent Time'
+#       inputs:
+#         targetType: 'inline'
+#         script: |
+#           echo "Attempting to sync time..."
+#           sudo timedatectl set-ntp true
+#           sleep 5
+#           echo "Time sync command executed. Current time:"
+#           date -u
 
-    - task: TerraformInstaller@0
-      displayName: 'Install Terraform $(terraformVersion)'
-      inputs:
-        terraformVersion: '$(terraformVersion)'
+#     - task: TerraformInstaller@0
+#       displayName: 'Install Terraform $(terraformVersion)'
+#       inputs:
+#         terraformVersion: '$(terraformVersion)'
 
-    # SSH Key *might* be needed for destroy operations depending on resources/providers
-    - task: Bash@3
-      displayName: 'Setup SSH Key'
-      inputs:
-        targetType: 'inline'
-        script: |
-          mkdir -p ~/.ssh
-          echo "$(sshPublicKey)" > ~/.ssh/azure_aks.pub
-          chmod 644 ~/.ssh/azure_aks.pub
-          echo "SSH public key configured in ~/.ssh/azure_aks.pub"
-      env:
-        SSH_PUBLIC_KEY: $(sshPublicKey)
+#     # SSH Key *might* be needed for destroy operations depending on resources/providers
+#     - task: Bash@3
+#       displayName: 'Setup SSH Key'
+#       inputs:
+#         targetType: 'inline'
+#         script: |
+#           mkdir -p ~/.ssh
+#           echo "$(sshPublicKey)" > ~/.ssh/azure_aks.pub
+#           chmod 644 ~/.ssh/azure_aks.pub
+#           echo "SSH public key configured in ~/.ssh/azure_aks.pub"
+#       env:
+#         SSH_PUBLIC_KEY: $(sshPublicKey)
 
-    # Init is required before destroy to configure the backend
-    - task: TerraformTaskV4@4
-      displayName: 'Terraform Init for Destroy'
-      inputs:
-        provider: 'azurerm'
-        command: 'init'
-        backendServiceArm: 'Azure-Service-Connection'
-        backendAzureRmResourceGroupName: 'terraform-state-rg'
-        backendAzureRmStorageAccountName: 'tfstoragemicrosvc'
-        backendAzureRmContainerName: 'tfstate'
-        backendAzureRmKey: '$(environment).terraform.tfstate'
+#     # Init is required before destroy to configure the backend
+#     - task: TerraformTaskV4@4
+#       displayName: 'Terraform Init for Destroy'
+#       inputs:
+#         provider: 'azurerm'
+#         command: 'init'
+#         backendServiceArm: 'Azure-Service-Connection'
+#         backendAzureRmResourceGroupName: 'terraform-state-rg'
+#         backendAzureRmStorageAccountName: 'tfstoragemicrosvc'
+#         backendAzureRmContainerName: 'tfstate'
+#         backendAzureRmKey: '$(environment).terraform.tfstate'
 
-    # Optional Wait - moved to the Destroy stage
-    - task: Bash@3
-      displayName: 'Wait 30 seconds before destroying resources'
-      inputs:
-        targetType: 'inline'
-        script: |
-          echo "Infrastructure verified. Waiting 30 seconds before starting destruction..."
-          sleep 30
-          echo "Wait complete. Proceeding with resource destruction..."
+#     # Optional Wait - moved to the Destroy stage
+#     - task: Bash@3
+#       displayName: 'Wait 30 seconds before destroying resources'
+#       inputs:
+#         targetType: 'inline'
+#         script: |
+#           echo "Infrastructure verified. Waiting 30 seconds before starting destruction..."
+#           sleep 30
+#           echo "Wait complete. Proceeding with resource destruction..."
 
-    - task: TerraformTaskV4@4
-      displayName: 'Terraform Destroy'
-      inputs:
-        provider: 'azurerm'
-        command: 'destroy'
-        # Service connection needed for destroying resources
-        environmentServiceNameAzureRM: 'Azure-Service-Connection'
-        # Pass variables needed for destroy, ensure -auto-approve is used cautiously
-        commandOptions: '-auto-approve -var="prefix=$(resourcePrefix)-$(environment)" -var="common_tags={\"environment\":\"$(environment)\",\"project\":\"MicroserviceApp\"}"'
+#     - task: TerraformTaskV4@4
+#       displayName: 'Terraform Destroy'
+#       inputs:
+#         provider: 'azurerm'
+#         command: 'destroy'
+#         # Service connection needed for destroying resources
+#         environmentServiceNameAzureRM: 'Azure-Service-Connection'
+#         # Pass variables needed for destroy, ensure -auto-approve is used cautiously
+#         commandOptions: '-auto-approve -var="prefix=$(resourcePrefix)-$(environment)" -var="common_tags={\"environment\":\"$(environment)\",\"project\":\"MicroserviceApp\"}"'
